@@ -1,3 +1,9 @@
+
+import static javax.swing.JOptionPane.showMessageDialog;
+import network.Client;
+import network.GameEvent;
+import network.Server;
+
 /*
  * To change this license header, choose License Headers in Project Properties.
  * To change this template file, choose Tools | Templates
@@ -10,11 +16,19 @@
  */
 public class OknoStart extends javax.swing.JFrame {
 
+    
+    private Server server = null;
+    private Client client = null;
+    private Boolean isSerwer = false;
+    private boolean clientStarted = false;
+    private OknoPlayer1 oknoPlayer1 = null;
+    
     /**
      * Creates new form OknoStart
      */
     public OknoStart() {
         initComponents();
+        initialize();
     }
 
     /**
@@ -30,6 +44,7 @@ public class OknoStart extends javax.swing.JFrame {
         jPanel2 = new javax.swing.JPanel();
         jButton1 = new javax.swing.JButton();
         jButton2 = new javax.swing.JButton();
+        jButton3 = new javax.swing.JButton();
 
         javax.swing.GroupLayout jPanel1Layout = new javax.swing.GroupLayout(jPanel1);
         jPanel1.setLayout(jPanel1Layout);
@@ -58,6 +73,13 @@ public class OknoStart extends javax.swing.JFrame {
             }
         });
 
+        jButton3.setText("wyslij wiadomosc");
+        jButton3.addActionListener(new java.awt.event.ActionListener() {
+            public void actionPerformed(java.awt.event.ActionEvent evt) {
+                jButton3ActionPerformed(evt);
+            }
+        });
+
         javax.swing.GroupLayout jPanel2Layout = new javax.swing.GroupLayout(jPanel2);
         jPanel2.setLayout(jPanel2Layout);
         jPanel2Layout.setHorizontalGroup(
@@ -68,6 +90,10 @@ public class OknoStart extends javax.swing.JFrame {
                     .addComponent(jButton1, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
                     .addComponent(jButton2, javax.swing.GroupLayout.DEFAULT_SIZE, 133, Short.MAX_VALUE))
                 .addContainerGap(147, Short.MAX_VALUE))
+            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, jPanel2Layout.createSequentialGroup()
+                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                .addComponent(jButton3)
+                .addGap(99, 99, 99))
         );
         jPanel2Layout.setVerticalGroup(
             jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
@@ -76,7 +102,9 @@ public class OknoStart extends javax.swing.JFrame {
                 .addComponent(jButton1)
                 .addGap(18, 18, 18)
                 .addComponent(jButton2)
-                .addContainerGap(185, Short.MAX_VALUE))
+                .addGap(75, 75, 75)
+                .addComponent(jButton3)
+                .addContainerGap(87, Short.MAX_VALUE))
         );
 
         javax.swing.GroupLayout layout = new javax.swing.GroupLayout(getContentPane());
@@ -95,15 +123,72 @@ public class OknoStart extends javax.swing.JFrame {
 
     private void jButton1ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton1ActionPerformed
         setVisible(false);
-        new OknoPlayer1().setVisible(true);
+        
+        
+        oknoPlayer1 = new OknoPlayer1();
+        oknoPlayer1.setVisible(true);
         // TODO add your handling code here:
+        
+        isSerwer = true;
+	if (server == null || !server.isRunning()) {
+
+            String host = "localhost";
+            int port = 4545;
+
+            server = new Server(port);
+            if (server.start()) {
+		client = new Client(getID(), host, port);
+
+		if (client.start()) {
+			GameEvent ge = new GameEvent(GameEvent.C_LOGIN);
+			sendMessage(ge);
+		}
+
+
+            } else {}
+					
+        } else {
+            if (server != null)
+		server.stop();
+		server = null;
+
+	}
     }//GEN-LAST:event_jButton1ActionPerformed
 
     private void jButton2ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton2ActionPerformed
-        setVisible(false);
+        
+        //setVisible(false);
         //new OknoPlayer2().setVisible(true);
         // TODO add your handling code here:
+        
+        isSerwer = false;
+	if (client == null || !client.isAlive()) {
+		String host = "localhost";
+		client = new Client(getID(), host, 4545);
+
+		if (client.start()) {
+			GameEvent ge = new GameEvent(GameEvent.C_LOGIN);
+			sendMessage(ge);
+                        clientStarted = true;
+		} else {
+			clientStarted = false;
+		}
+	} else {
+            if (client != null) {
+		client.stop();
+		clientStarted = false;
+            }
+            client = null;
+	}
     }//GEN-LAST:event_jButton2ActionPerformed
+
+    private void jButton3ActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_jButton3ActionPerformed
+        
+        GameEvent ge = new GameEvent(GameEvent.C_SHOT);
+        ge.setMessage("test message");
+        ge.setPlayerId(getID());
+	this.sendMessage(ge);
+    }//GEN-LAST:event_jButton3ActionPerformed
 
     /**
      * @param args the command line arguments
@@ -143,7 +228,81 @@ public class OknoStart extends javax.swing.JFrame {
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JButton jButton1;
     private javax.swing.JButton jButton2;
+    private javax.swing.JButton jButton3;
     private javax.swing.JPanel jPanel1;
     private javax.swing.JPanel jPanel2;
     // End of variables declaration//GEN-END:variables
+
+    public boolean sendMessage(GameEvent ge) {
+		if (client != null && client.isAlive()) {
+			ge.setPlayerId(getID());
+			client.sendMessage(ge);
+			return true;
+		} else {
+			return false;
+		}
+    }
+
+    private String getID() {
+		return (isSerwer) ? "ID_SERVER" : "ID_CLIENT";
+    }
+    
+    private void initialize() {
+
+		new Thread() {
+			@Override
+			public void run() {
+				while (true) {
+					if (client != null && client.isAlive()) {
+						processMessages();
+					} else if (clientStarted && client != null) {
+						client.stop();
+						client = null;
+					}
+					try {
+						Thread.sleep(20);
+					} catch (InterruptedException ex) {
+					}
+				}
+			}
+		}.start();
+	}
+
+	private void processMessages() {
+		GameEvent ge;
+		while (client != null && client.isAlive()
+				&& (ge = client.receiveMessage()) != null) {
+			switch (ge.getType()) {
+
+			case GameEvent.SB_LOGIN:
+
+				break;
+
+			case GameEvent.SB_CAN_JOIN_GAME:
+				break;
+
+			case GameEvent.SB_PLAYER_JOINED:
+				
+				break;
+			case GameEvent.SB_START_GAME:
+
+				break;
+
+			case GameEvent.SB_SHOT:
+                                oknoPlayer1.jTextField2.setText(ge.getMessage());
+                                break;
+			case GameEvent.SB_SHOT_RESULT:
+				
+				break;
+			case GameEvent.SB_PLAYER_QUIT:
+
+				break;
+			case GameEvent.S_TOO_MANY_CONNECTIONS:
+				if (client != null)
+					client.stop();
+				client = null;
+				break;	
+			}
+		}
+	}
 }
